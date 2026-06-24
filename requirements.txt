@@ -1,0 +1,6 @@
+ultralytics
+opencv-python
+numpy
+openai
+torch
+torch-geometric
