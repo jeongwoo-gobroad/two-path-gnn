@@ -1,22 +1,4 @@
 #!/usr/bin/env python3
-"""
-01_sam3_leaf_stem.py
-
-SAM3로 식물 이미지에서 stem/leaf 후보 mask만 추출합니다.
-출력:
-  output_root/images/<image>
-  output_root/segments/<image_id>.json
-  output_root/overlays/<image_id>_sam3_overlay.png
-  output_root/masks/<image_id>_<segment_id>.png  (선택)
-
-전제:
-  - sam3.pt가 이 스크립트와 같은 폴더에 있거나 --sam3-model로 지정되어 있어야 합니다.
-  - ultralytics가 설치되어 있어야 합니다.
-
-예시:
-  python 01_sam3_leaf_stem.py --input ../imgs/img1.png --out plant_dataset
-  python 01_sam3_leaf_stem.py --input ../imgs --out plant_dataset
-"""
 from __future__ import annotations
 
 import argparse
@@ -164,7 +146,7 @@ def bottom_to_top_axis(poly: np.ndarray) -> list[float] | None:
     if poly is None or len(poly) < 2:
         return None
     p1, p2 = farthest_polygon_points(poly)
-    # 이미지 좌표계에서는 y가 클수록 아래입니다.
+    # 이미지에서는 y가 클수록 아래라서, 축 방향을 아래->위로 맞춰 둡니다.
     if p1[1] >= p2[1]:
         bottom, top = p1, p2
     else:
@@ -265,7 +247,7 @@ def polygon_overlap_area_ratio(left: dict, right: dict, width: int, height: int)
     if intersection <= 0:
         return 0.0
 
-    # 작은 객체가 큰 객체 안에 중복 검출된 경우도 제거하기 위해 작은 영역 기준 비율을 사용합니다.
+    # 작은 마스크가 큰 마스크 안에 겹쳐 잡히는 경우가 있어서, 더 작은 쪽 면적 기준으로 봅니다.
     reference_area = max(1.0, min(float(left.get("area_px", 0.0)), float(right.get("area_px", 0.0))))
     return float(intersection / reference_area)
 
@@ -297,9 +279,9 @@ def draw_overlay(image_bgr: np.ndarray, records: list[dict], out_path: Path) -> 
     for rec in records:
         poly = np.asarray(rec["polygon_xy"], dtype=np.int32)
         if rec["kind"] == "stem":
-            color = (50, 80, 255)   # red-ish in BGR
+            color = (50, 80, 255)
         else:
-            color = (60, 220, 60)   # green
+            color = (60, 220, 60)
         cv2.fillPoly(fill, [poly], color)
 
     overlay = cv2.addWeighted(fill, alpha, overlay, 1 - alpha, 0)
@@ -348,8 +330,6 @@ def process_one(image_path: Path, predictor, cfg: Config) -> None:
         records.extend(result_to_records(result, (h, w), cfg))
     records = suppress_overlapping_records_by_confidence(records, w, h, cfg.same_overlap_area)
 
-    # confidence 높은 순으로 정렬하되, stem_id는 좌->우/위->아래가 아니라 segment 순서 그대로 번호화합니다.
-    # overlay 식별 목적상 숫자는 1부터 시작합니다.
     for sid, rec in enumerate(records):
         rec["segment_id"] = sid
 

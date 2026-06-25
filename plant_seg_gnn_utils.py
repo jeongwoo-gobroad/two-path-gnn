@@ -145,7 +145,7 @@ def bottom_to_top_axis(polygon: np.ndarray) -> list[float] | None:
     if polygon is None or len(polygon) < 2:
         return None
     point_a, point_b = farthest_polygon_points(polygon)
-    # GNN 학습 스크립트와 동일하게 y가 큰 점을 bottom, 작은 점을 top으로 둡니다.
+    # 이미지에서는 y가 클수록 아래라서, 축 방향을 아래->위로 맞춰 둡니다.
     if point_a[1] >= point_b[1]:
         bottom, top = point_a, point_b
     else:
@@ -276,7 +276,7 @@ def polygon_overlap_area_ratio(
     if intersection <= 0:
         return 0.0
 
-    # 작은 객체가 큰 객체 안에 중복 검출된 경우도 제거하기 위해 작은 영역 기준 비율을 사용합니다.
+    # 작은 마스크가 큰 마스크 안에 겹쳐 잡히는 경우가 있어서, 더 작은 쪽 면적 기준으로 봅니다.
     reference_area = max(1.0, min(float(left.get("area_px", 0.0)), float(right.get("area_px", 0.0))))
     return float(intersection / reference_area)
 
@@ -525,7 +525,7 @@ def leaf_scalar_point(record: dict[str, Any]) -> tuple[float, float]:
     best_point = (start + end) * 0.5
     best_width = -1.0
 
-    # 잎은 방향 벡터 대신, 최장축과 수직 chord가 가장 긴 위치의 교점을 대표점으로 사용합니다.
+    # 잎은 줄기처럼 방향이 중요하지 않아서, 가장 두꺼운 지점을 대표점으로 씁니다.
     for ratio in np.linspace(0.05, 0.95, 25):
         point = start + axis * float(ratio)
         if cv2.pointPolygonTest(polygon.reshape(-1, 1, 2), (float(point[0]), float(point[1])), False) < -0.5:
@@ -594,7 +594,7 @@ def build_edges(nodes: list[dict[str, Any]], edge_radius_norm: float, knn_k: int
             if node_distance(nodes[left_idx], nodes[right_idx]) <= edge_radius_norm:
                 undirected.add((left_idx, right_idx))
 
-    # 그래프가 지나치게 희소해지는 것을 막기 위해 각 노드의 가까운 k개 이웃을 추가합니다.
+    # 가까운 애들만 잇되, 그래프가 끊기면 주변 k개를 더 붙여 줍니다.
     if knn_k > 0:
         for left_idx in range(node_count):
             distances = []

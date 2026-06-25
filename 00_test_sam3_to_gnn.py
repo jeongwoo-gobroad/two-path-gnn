@@ -11,10 +11,6 @@ from plant_seg_gnn_utils import (
 )
 
 
-# =========================
-# User parameters
-# =========================
-
 img_path = "./img1.png"
 img_paths = [""]
 gnn_model_path = "./plant_dataset/gnn_model.pt"

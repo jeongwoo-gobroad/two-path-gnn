@@ -1,29 +1,4 @@
 #!/usr/bin/env python3
-"""
-03_train_gnn_main_side.py
-
-SAM3 segment JSON + LLM stem label JSON으로 GNN을 학습합니다.
-
-입력 node feature는 stem과 leaf를 다른 기하 표현으로 분리한 8차원을 사용합니다.
-  [stem_x1, stem_y1, stem_x2, stem_y2, leaf_x, leaf_y, is_stem, is_leaf]
-stem은 폴리곤 최장축 벡터를 쓰고 leaf_x/leaf_y는 0으로 둡니다.
-leaf는 stem 벡터 4값을 0으로 두고, 최장축에 수직인 최장 chord와 최장축의 교점을 leaf_x/leaf_y로 둡니다.
-좌표는 이미지 width/height로 0~1 정규화합니다.
-
-학습 target:
-  stem node에 대해서만 binary classification
-    0 = side_branch
-    1 = main_stem
-  leaf node는 context node로만 사용하고 loss에서는 제외합니다.
-
-그래프 edge:
-  node 간 endpoint/centroid 거리가 radius 이하이면 edge를 만듭니다.
-  edge가 너무 적으면 kNN edge를 추가합니다.
-
-예시:
-  python 03_train_gnn_main_side.py --dataset plant_dataset --epochs 300
-  python 03_train_gnn_main_side.py --dataset plant_dataset --predict-only --checkpoint plant_dataset/gnn_model.pt
-"""
 from __future__ import annotations
 
 import argparse
@@ -150,7 +125,7 @@ def leaf_scalar_point(rec: dict[str, Any]) -> tuple[float, float]:
     best_point = (start + end) * 0.5
     best_width = -1.0
 
-    # 잎은 방향 벡터 대신, 최장축과 수직 chord가 가장 긴 위치의 교점을 대표점으로 사용합니다.
+    # 잎은 줄기처럼 방향이 중요하지 않아서, 가장 두꺼운 지점을 대표점으로 씁니다.
     for ratio in np.linspace(0.05, 0.95, 25):
         point = start + axis * float(ratio)
         if cv2.pointPolygonTest(poly.reshape(-1, 1, 2), (float(point[0]), float(point[1])), False) < -0.5:
@@ -222,7 +197,7 @@ def build_edges(nodes: list[dict[str, Any]], edge_radius_norm: float, knn_k: int
             if node_distance(nodes[i], nodes[j]) <= edge_radius_norm:
                 undirected.add((i, j))
 
-    # edge가 너무 드문 이미지에 대한 안전장치: 각 node에서 가까운 k개를 연결합니다.
+    # 가까운 애들만 잇되, 그래프가 끊기면 주변 k개를 더 붙여 줍니다.
     if knn_k > 0:
         for i in range(n):
             dists = []
@@ -284,6 +259,7 @@ def build_graph(segment_path: Path, label_path: Path, cfg: GraphBuildConfig) -> 
         else:
             stem_axis_norm = [0.0, 0.0, 0.0, 0.0]
             leaf_point_norm = normalize_point(leaf_scalar_point(rec), width, height)
+        # stem은 긴 축 벡터, leaf는 대표점 하나만 넣어서 서로 다른 모양 정보를 나눠 줍니다.
         x = stem_axis_norm + [leaf_point_norm[0], leaf_point_norm[1], is_stem, is_leaf]
 
         y = -100

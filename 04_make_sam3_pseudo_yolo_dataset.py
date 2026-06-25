@@ -14,10 +14,6 @@ from plant_seg_gnn_utils import (
 )
 
 
-# =========================
-# User parameters
-# =========================
-
 source_img_dir = "./tomato_greenhouse_dataset/images"
 target_path = "./tomato4yolo"
 t_v_ratio = (0.7, 0.3)

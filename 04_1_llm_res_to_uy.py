@@ -8,10 +8,6 @@ from typing import Any
 import numpy as np
 
 
-# =========================
-# User parameters
-# =========================
-
 dataset_root = "../plant_dataset"
 target_dir = "../tomato"
 train_test_ratio = (1.0, 0.0)
@@ -35,7 +31,6 @@ def write_data_yaml(root: Path) -> None:
     lines = [
         f"path: {json.dumps(root.resolve().as_posix())}",
         "train: images/train",
-        # Ultralytics train mode expects a val key. All LLM labels are train, so val mirrors train.
         "val: images/train",
         "test: images/test",
         "",

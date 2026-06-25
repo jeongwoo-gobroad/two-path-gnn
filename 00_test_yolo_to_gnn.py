@@ -10,10 +10,6 @@ from plant_seg_gnn_utils import (
 )
 
 
-# =========================
-# User parameters
-# =========================
-
 yolo_model_path = "best.pt"
 img_path = "./img1.png"
 img_paths = [""]
@@ -28,8 +24,6 @@ yolo_iou = 0.70
 yolo_imgsz = 1024
 device = ""
 
-# 비워두면 model.names에서 leaf/stem을 자동 추론합니다.
-# 이름이 불명확한 모델이면 예: yolo_leaf_class_ids = [0], yolo_stem_class_ids = [1]
 yolo_leaf_class_ids: list[int] = []
 yolo_stem_class_ids: list[int] = []
 

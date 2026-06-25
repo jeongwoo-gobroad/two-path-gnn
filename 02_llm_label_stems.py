@@ -1,45 +1,4 @@
 #!/usr/bin/env python3
-"""
-02_llm_label_stems.py
-
-01_sam3_leaf_stem.py가 만든 segments JSON을 읽고,
-원본 이미지 위에 stem 후보 번호를 크게 표시한 뒤 OpenAI vision-capable model에
-각 번호가 main_stem인지 side_branch인지 판정하게 합니다.
-
-기본 동작은 OpenAI Batch API입니다. 즉, 여러 이미지 요청을 JSONL 파일로 만들고
-비동기 Batch job으로 제출합니다.
-
-출력:
-  output_root/llm_overlays/<image_id>_numbered.png
-  output_root/llm_overlays/<image_id>_numbered_api.png
-  output_root/llm_batch/batch_input.jsonl
-  output_root/llm_batch/batch_index.json
-  output_root/llm_batch/batch_state.json
-  output_root/llm_batch/batch_output.jsonl
-  output_root/llm_labels/<image_id>.json
-
-환경 변수:
-  export OPENAI_API_KEY="sk-..."
-
-Batch 예시:
-  # 1) batch 제출. 결과는 즉시 나오지 않습니다.
-  python 02_llm_label_stems.py --dataset plant_dataset --mode batch-submit --model gpt-4.1
-
-  # 2) 상태 확인.
-  python 02_llm_label_stems.py --dataset plant_dataset --mode batch-status
-
-  # 3) 완료 후 결과 다운로드 및 llm_labels/*.json 생성.
-  python 02_llm_label_stems.py --dataset plant_dataset --mode batch-fetch
-
-  # 4) 완료될 때까지 기다렸다가 자동으로 fetch.
-  python 02_llm_label_stems.py --dataset plant_dataset --mode batch-wait
-
-  # 5) API 호출 없이 overlay와 batch_input.jsonl만 생성.
-  python 02_llm_label_stems.py --dataset plant_dataset --mode batch-submit --dry-run
-
-동기식 sequential 예시:
-  python 02_llm_label_stems.py --dataset plant_dataset --mode sequential --model gpt-4.1 --max-images 10
-"""
 from __future__ import annotations
 
 import argparse
@@ -134,7 +93,7 @@ def draw_numbered_stem_overlay(segment_json: dict[str, Any], overlay_path: Path,
     overlay = image_bgr.copy()
     translucent = image_bgr.copy()
 
-    # leaf는 흐리게, stem은 강하게 표시합니다.
+    # 모델이 번호를 헷갈리지 않도록 stem만 확실히 튀게 그립니다.
     for rec in segment_json["segments"]:
         poly = np.asarray(rec["polygon_xy"], dtype=np.int32)
         if rec["kind"] == "leaf":
@@ -243,8 +202,7 @@ def extract_json_object(text: str) -> dict[str, Any]:
 
 
 def response_body_to_text(body: dict[str, Any]) -> str:
-    # Python SDK 동기 호출에서는 response.output_text 속성이 있지만,
-    # Batch output JSONL에는 raw response body가 들어옵니다. 여기서 text를 복원합니다.
+    # Batch 결과는 raw body로 돌아오니, 여기서 실제 답변 text만 꺼냅니다.
     if isinstance(body.get("output_text"), str):
         return body["output_text"]
 
@@ -263,7 +221,6 @@ def response_body_to_text(body: dict[str, Any]) -> str:
     if texts:
         return "\n".join(texts)
 
-    # Chat Completions 형태로 잘못 반환된 경우까지 방어적으로 처리합니다.
     choices = body.get("choices") or []
     if choices:
         msg = choices[0].get("message", {})
@@ -549,12 +506,7 @@ def write_jsonl_bytes(path: Path, rows: list[bytes]) -> None:
 
 
 def prepare_batch_inputs(args) -> list[dict[str, Any]]:
-    """Create one or more JSONL files under --max-batch-file-mb.
-
-    Each JSONL row contains one Responses API request for one image overlay.
-    The overlay image is embedded as a base64 data URL, so file size can grow
-    quickly. This function actively chunks requests by exact UTF-8 JSONL bytes.
-    """
+    # overlay 이미지를 base64로 넣으면 금방 커져서, 실제 JSONL byte 기준으로 잘라 냅니다.
     max_bytes = int(float(args.max_batch_file_mb) * 1024 * 1024)
     if max_bytes <= 0:
         raise ValueError("--max-batch-file-mb must be positive.")
@@ -691,7 +643,6 @@ def prepare_batch_inputs(args) -> list[dict[str, Any]]:
 def load_batch_manifest(args) -> dict[str, Any]:
     manifest_path = batch_manifest_path(args)
     if not manifest_path.exists():
-        # Backward-compatible fallback for the older one-file batch script.
         old_state = batch_state_path(args)
         old_index = batch_index_path(args)
         old_input = batch_input_path(args)
@@ -860,7 +811,6 @@ def refresh_all_batch_states(args) -> tuple[dict[str, Any], list[dict[str, Any] 
 
 def print_batch_status(args) -> list[dict[str, Any] | None]:
     if args.batch_id:
-        # Direct single-batch inspection without a local manifest.
         client = openai_client()
         batch = client.batches.retrieve(args.batch_id)
         batch_dict = openai_obj_to_dict(batch)
